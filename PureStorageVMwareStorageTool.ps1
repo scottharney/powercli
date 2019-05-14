@@ -2807,7 +2807,7 @@ function cloneVMFS{
             $outputTextBox.text = ((get-Date -Format G) + " Resignaturing the VMFS...`r`n$($outputTextBox.text)")
             $esxcli.storage.vmfs.snapshot.resignature.invoke($resigOp)
             Start-sleep -s 10
-            $cluster | Get-VMHost | Get-VMHostStorage -RescanVMFS -ErrorAction stop 
+            $scriptparams.vcluster | Get-VMHost | Get-VMHostStorage -RescanVMFS -ErrorAction stop 
             $datastores = $esxi[0] | Get-Datastore -ErrorAction stop
             $recoverylun = ("naa.624a9370" + $newvol.serial)
             foreach ($ds in $datastores)
