@@ -72,6 +72,8 @@ $EndPoint = $null
 $Endpoints = @()
 $ErrorActionPreference = "Stop"
 
+$starttime = $(Get-Date)
+Write-Host "Starting VMDK cloning operation: $starttime"
 # load in required parameters from psd1 file
 $scriptparams = Import-PowerShellDataFile '.\CloneVMDKParameters.psd1'
 # see https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/ for details
@@ -93,9 +95,7 @@ try
     $newpurevol = New-PfaVolume -array $flasharray -source $puresourcesnapshot.name -VolumeName $volumename
     New-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
     Write-Host "Pure temporary volume $($newpurevol.name) created and mapped to host group $($scriptparams.purehostgroup)"
-    Write-Host "Rescanning Hosts in vsphere cluster $($scriptparams.vcluster)..."
     $cluster = get-cluster $scriptparams.vcluster
-    $cluster | Get-VMHost | Get-VMHostStorage -RescanAllHba -RescanVMFS -ErrorAction stop
     $esxi = get-cluster -Name $scriptparams.vcluster | Get-VMHost -ErrorAction stop
     $esxcli=get-esxcli -VMHost $esxi[0] -v2 -ErrorAction stop
     $resigargs =$esxcli.storage.vmfs.snapshot.list.createargs()
@@ -114,6 +114,7 @@ try
         Write-Host " Resignaturing the VMFS... $($scriptparams.purevol)"
         $esxcli.storage.vmfs.snapshot.resignature.invoke($resigOp)
         Start-sleep -s 10
+        Write-Host "Rescanning Hosts in vsphere cluster $($scriptparams.vcluster)..."
         $cluster | Get-VMHost | Get-VMHostStorage -RescanVMFS -ErrorAction stop 
         $datastores = $esxi[0] | Get-Datastore -ErrorAction stop
         $recoverylun = ("naa.624a9370" + $newpurevol.serial)
@@ -126,7 +127,7 @@ try
             }
         } 
         $resigds = $resigds | Set-Datastore -Name $volumename -ErrorAction stop
-        Write-Host " Presented copied VMFS named  $resigds.name "
+        Write-Host " Presented copied VMFS named  $($resigds.name) "
     }
 }
 catch
@@ -135,6 +136,16 @@ catch
     if ($newpurevol -ne $null)
     {
         Write-Host " Cleaning up volume... $($Error[0])"
+        if ($unresolvedvmfs.UnresolvedExtentCount -eq 1)
+        {
+            $esxihosts = $resigds |get-vmhost
+            foreach ($esxihost in $esxihosts)
+            {
+                $storageSystem = Get-View $esxihost.Extensiondata.ConfigManager.StorageSystem -ErrorAction stop
+	              $StorageSystem.UnmountVmfsVolume($resigds.ExtensionData.Info.vmfs.uuid) 
+                $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
+            }
+        }
         Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
@@ -144,3 +155,108 @@ catch
         Write-Host " The recovery datastore has been deleted"
     }
 }
+try
+{
+    Start-Sleep -Seconds 6
+    #$filepath = ($scriptparams.sourcevmdk.SelectedItem.ToString().Split("(")[0])
+    #$filepath = $filepath.Substring(0,$filepath.Length-1)
+    $targetvm = Get-VM -name $scriptparams.destvm
+    $sourcevm = Get-VM -name $scriptparams.sourcevm
+    $datastore = $scriptparams.datastore
+    $sourcevmdk = $scriptparams.sourcevmdk
+    $filepath = "[$datastore] $($sourcevm.Name)/$sourcevmdk"
+    Write-Host "DEBUG: filepath at top of try = $filepath"
+    $disk = $sourcevm | get-harddisk |where-object { $_.Filename -eq $filepath } -ErrorAction stop
+    if ($targetvm -eq $sourcevm)
+    {
+        $controller = $disk |Get-ScsiController -ErrorAction stop
+    }
+    else
+    {
+        $controller = $targetvm |Get-ScsiController
+        $controller = $controller[0]
+    }
+    $oldname = ($filepath.Split("]")[0]).substring(1)
+    #$filepath = $filepath -replace $oldname, $resigds.name
+    $filepath = "[$($resigds.name)] $sourcevm/$sourcevmdk"
+    Write-Host " $filepath"
+    Write-Host " Adding VMDK from copied datastore $datastore..."
+    $vmDisks = $targetvm | get-harddisk
+    $vdm = get-view -id (get-view serviceinstance).content.virtualdiskmanager
+    $dc=$targetvm |get-datacenter 
+    foreach ($vmDisk in $vmDisks)
+    {
+        $currentUUID=$vdm.queryvirtualdiskuuid($vmDisk.Filename, $dc.id)
+        Write-Host "DEBUG: vmDisk=$vmDisk and filepath=$filepath"
+        if ($currentUUID -eq $oldUUID)
+        {
+            Write-Host " Found duplicate disk UUID on target VM. Assigning a new UUID to the copied VMDK"
+            $firstHalf = $oldUUID.split("-")[0]
+            $testguid=[Guid]::NewGuid()
+            $strGuid=[string]$testguid
+            $arrGuid=$strGuid.split("-")
+            $secondHalfTemp=$arrGuid[3]+$arrGuid[4]
+            $halfUUID=$secondHalfTemp[0]+$secondHalfTemp[1]+" "+$secondHalfTemp[2]+$secondHalfTemp[3]+" "+$secondHalfTemp[4]+$secondHalfTemp[5]+" "+$secondHalfTemp[6]+$secondHalfTemp[7]+" "+$secondHalfTemp[8]+$secondHalfTemp[9]+" "+$secondHalfTemp[10]+$secondHalfTemp[11]+" "+$secondHalfTemp[12]+$secondHalfTemp[13]+" "+$secondHalfTemp[14]+$secondHalfTemp[15]
+            $vdm.setVirtualDiskUuid($filePath, $dc.id, $firstHalf+"-"+$halfUUID)
+            break
+        }
+    }
+    $newDisk = $targetvm | new-harddisk -DiskPath $filepath -Controller $controller -ErrorAction stop
+    Write-Host " COMPLETE: VMDK copy added to VM."
+    $oldUUID=$vdm.queryvirtualdiskuuid($filePath, $dc.id)
+}
+catch
+{
+    Write-Host " $($Error[0])"
+    Write-Host " Attempting to cleanup copied datastore..."
+    if ($vms.count -eq 0)
+    {
+        $esxihosts = $resigds |get-vmhost
+        foreach ($esxihost in $esxihosts)
+        {
+            $storageSystem = Get-View $esxihost.Extensiondata.ConfigManager.StorageSystem -ErrorAction stop
+	          $StorageSystem.UnmountVmfsVolume($resigds.ExtensionData.Info.vmfs.uuid) 
+            $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
+        }
+        Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $hostgroup
+        Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
+        Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
+        Write-Host " Rescanning cluster..."
+        $targetvm |get-cluster | Get-VMHost | Get-VMHostStorage -RescanAllHba -RescanVMFS -ErrorAction stop 
+        Write-Host " The recovery datastore has been deleted"
+    }
+}
+try
+{
+    Write-Host " Moving the VMDK to the original datastore..."
+    $targetDatastore = $scriptparams.datastore
+    Move-HardDisk -HardDisk $newDisk -Datastore ($targetDatastore) -Confirm:$false -ErrorAction stop
+    $vms = $resigds |get-vm
+    if ($vms.count -eq 0)
+    {
+        $esxihosts = $resigds |get-vmhost
+        foreach ($esxihost in $esxihosts)
+        {
+            $storageSystem = Get-View $esxihost.Extensiondata.ConfigManager.StorageSystem -ErrorAction stop
+	          $StorageSystem.UnmountVmfsVolume($resigds.ExtensionData.Info.vmfs.uuid) 
+            $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
+        }
+        Write-Host " Removing copied datastore..."
+        Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $hostgroup
+        Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
+        Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
+        Write-Host " Rescanning cluster..."
+        $targetvm |get-cluster | Get-VMHost | Get-VMHostStorage -RescanAllHba -RescanVMFS -ErrorAction stop 
+        Write-Host " COMPLETE: The VMDK has been moved and the temporary datastore has been deleted"
+    }
+}
+catch
+{
+    Write-Host "  $($Error[0])"
+}
+
+$endtime = $(Get-date)
+$elapsed = $endtime - $starttime
+$totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsed.Ticks)
+Write-Host "Finished at $endtime"
+Write-Host "Elapsed duration: $totalTime"
