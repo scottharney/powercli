@@ -9,8 +9,8 @@
     purevol = 'SLAB-FA-M20-GEN-DS-01'
     datastore = 'SLAB-FA-M20-GEN-DS-01'
     purehostgroup = 'slab-esxi-gen'
-    sourcevm = 'ACI_Win10_POD5'
-    sourcevmdk = 'ACI_Win10_POD5.vmdk'
+    sourcevm = 'slab-win10-02-2018'
+    sourcevmdk = 'slab-win10-02-2018.vmdk'
     destvm = 'ACI_Win10_01'
 
 }

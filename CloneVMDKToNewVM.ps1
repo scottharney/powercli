@@ -68,8 +68,6 @@ if ((!(Get-Module -Name VMware.VimAutomation.Core -ErrorAction SilentlyContinue)
 set-powercliconfiguration -invalidcertificateaction "ignore" -confirm:$false |out-null
 Set-PowerCLIConfiguration -Scope User -ParticipateInCEIP $false  -confirm:$false|out-null
 #Set
-$EndPoint = $null
-$Endpoints = @()
 $ErrorActionPreference = "Stop"
 
 $starttime = $(Get-Date)
@@ -88,13 +86,13 @@ $vcenter = Connect-ViServer -server $scriptparams.vcenter -credential $vcentercr
 $purevolsnapshots = Get-PfaVolumeSnapshots -array $flasharray -volume $scriptparams.purevol
 #get the last(most recent) snapshot from the list
 $puresourcesnapshot = $purevolsnapshots[-1]
-Write-Host "Using most recent snapshot, $($puresourcesnapshot.Name) from $($scriptparams.purevol) to create temporary Pure Datastore Volume"
+Write-Host ((get-Date -Format G) + " Using most recent snapshot, $($puresourcesnapshot.Name) from $($scriptparams.purevol) to create temporary Pure Datastore Volume"
 try
 {
     $volumename = $scriptparams.purevol + "-snap-" + (Get-Random -Minimum 1000 -Maximum 9999)
     $newpurevol = New-PfaVolume -array $flasharray -source $puresourcesnapshot.name -VolumeName $volumename
     New-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
-    Write-Host "Pure temporary volume $($newpurevol.name) created and mapped to host group $($scriptparams.purehostgroup)"
+    Write-Host (get-Date -Format G) + " Pure temporary volume $($newpurevol.name) created and mapped to host group $($scriptparams.purehostgroup)"
     $cluster = get-cluster $scriptparams.vcluster
     $esxi = get-cluster -Name $scriptparams.vcluster | Get-VMHost -ErrorAction stop
     $esxcli=get-esxcli -VMHost $esxi[0] -v2 -ErrorAction stop
@@ -111,10 +109,10 @@ try
     {
         $resigOp = $esxcli.storage.vmfs.snapshot.resignature.createargs()
         $resigOp.volumelabel = $resigargs.volumelabel
-        Write-Host " Resignaturing the VMFS... $($scriptparams.purevol)"
+        Write-Host (get-Date -Format G) + " Resignaturing the VMFS... $($scriptparams.purevol)"
         $esxcli.storage.vmfs.snapshot.resignature.invoke($resigOp)
         Start-sleep -s 10
-        Write-Host "Rescanning Hosts in vsphere cluster $($scriptparams.vcluster)..."
+        Write-Host (get-Date -Format G) + " Rescanning Hosts in vsphere cluster $($scriptparams.vcluster)..."
         $cluster | Get-VMHost | Get-VMHostStorage -RescanVMFS -ErrorAction stop 
         $datastores = $esxi[0] | Get-Datastore -ErrorAction stop
         $recoverylun = ("naa.624a9370" + $newpurevol.serial)
@@ -127,15 +125,15 @@ try
             }
         } 
         $resigds = $resigds | Set-Datastore -Name $volumename -ErrorAction stop
-        Write-Host " Presented copied VMFS named  $($resigds.name) "
+        Write-Host (get-Date -Format G) + " Presented copied VMFS named  $($resigds.name) "
     }
 }
 catch
 {
-    Write-Host "FAILED: Datastore creation Failed: $($error[0])" 
+    Write-Host (get-Date -Format G) + " FAILED: Datastore creation Failed: $($error[0])" 
     if ($newpurevol -ne $null)
     {
-        Write-Host " Cleaning up volume... $($Error[0])"
+        Write-Host (get-Date -Format G) + " Cleaning up volume... $($Error[0])"
         if ($unresolvedvmfs.UnresolvedExtentCount -eq 1)
         {
             $esxihosts = $resigds |get-vmhost
@@ -149,23 +147,22 @@ catch
         Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
-        Write-Host " Rescanning cluster..." 
+        Write-Host (get-Date -Format G) + " Rescanning cluster..." 
         $esxi = get-cluster -Name $scriptparams.vcluster | Get-VMHost -ErrorAction stop
         $esxi | Get-VMHostStorage -RescanAllHba -RescanVMFS 
-        Write-Host " The recovery datastore has been deleted"
+        Write-Host (get-Date -Format G) + " The recovery datastore has been deleted"
     }
+    Exit 1
 }
 try
 {
     Start-Sleep -Seconds 6
-    #$filepath = ($scriptparams.sourcevmdk.SelectedItem.ToString().Split("(")[0])
-    #$filepath = $filepath.Substring(0,$filepath.Length-1)
     $targetvm = Get-VM -name $scriptparams.destvm
     $sourcevm = Get-VM -name $scriptparams.sourcevm
     $datastore = $scriptparams.datastore
     $sourcevmdk = $scriptparams.sourcevmdk
     $filepath = "[$datastore] $($sourcevm.Name)/$sourcevmdk"
-    Write-Host "DEBUG: filepath at top of try = $filepath"
+    #Write-Host (get-Date -Format G) + " DEBUG: filepath at top of try = $filepath"
     $disk = $sourcevm | get-harddisk |where-object { $_.Filename -eq $filepath } -ErrorAction stop
     if ($targetvm -eq $sourcevm)
     {
@@ -178,19 +175,19 @@ try
     }
     $oldname = ($filepath.Split("]")[0]).substring(1)
     #$filepath = $filepath -replace $oldname, $resigds.name
-    $filepath = "[$($resigds.name)] $sourcevm/$sourcevmdk"
-    Write-Host " $filepath"
-    Write-Host " Adding VMDK from copied datastore $datastore..."
+    $filepath = "[$($resigds.name)] $($sourcevm.name)/$sourcevmdk"
+    Write-Host (get-Date -Format G) + " DEBUG: Initial target filepath = $filepath"
+    Write-Host (get-Date -Format G) + " Adding VMDK from copied datastore $datastore..."
     $vmDisks = $targetvm | get-harddisk
     $vdm = get-view -id (get-view serviceinstance).content.virtualdiskmanager
     $dc=$targetvm |get-datacenter 
     foreach ($vmDisk in $vmDisks)
     {
         $currentUUID=$vdm.queryvirtualdiskuuid($vmDisk.Filename, $dc.id)
-        Write-Host "DEBUG: vmDisk=$vmDisk and filepath=$filepath"
+        Write-Host (get-Date -Format G) + " DEBUG: vmDisk=$vmDisk and filepath=$filepath"
         if ($currentUUID -eq $oldUUID)
         {
-            Write-Host " Found duplicate disk UUID on target VM. Assigning a new UUID to the copied VMDK"
+            Write-Host (get-Date -Format G) + " Found duplicate disk UUID on target VM. Assigning a new UUID to the copied VMDK"
             $firstHalf = $oldUUID.split("-")[0]
             $testguid=[Guid]::NewGuid()
             $strGuid=[string]$testguid
@@ -202,13 +199,13 @@ try
         }
     }
     $newDisk = $targetvm | new-harddisk -DiskPath $filepath -Controller $controller -ErrorAction stop
-    Write-Host " COMPLETE: VMDK copy added to VM."
+    Write-Host (get-Date -Format G) + " COMPLETE: VMDK copy added to VM."
     $oldUUID=$vdm.queryvirtualdiskuuid($filePath, $dc.id)
 }
 catch
 {
-    Write-Host " $($Error[0])"
-    Write-Host " Attempting to cleanup copied datastore..."
+    Write-Host (get-Date -Format G) + " $($Error[0])"
+    Write-Host (get-Date -Format G) + " Attempting to cleanup copied datastore..."
     if ($vms.count -eq 0)
     {
         $esxihosts = $resigds |get-vmhost
@@ -221,14 +218,15 @@ catch
         Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $hostgroup
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
-        Write-Host " Rescanning cluster..."
+        Write-Host (get-Date -Format G) + " Rescanning cluster..."
         $targetvm |get-cluster | Get-VMHost | Get-VMHostStorage -RescanAllHba -RescanVMFS -ErrorAction stop 
-        Write-Host " The recovery datastore has been deleted"
+        Write-Host (get-Date -Format G) + " The recovery datastore has been deleted"
     }
+    Exit 1
 }
 try
 {
-    Write-Host " Moving the VMDK to the original datastore..."
+    Write-Host (get-Date -Format G) + " Moving the VMDK to the original datastore..."
     $targetDatastore = $scriptparams.datastore
     Move-HardDisk -HardDisk $newDisk -Datastore ($targetDatastore) -Confirm:$false -ErrorAction stop
     $vms = $resigds |get-vm
@@ -241,18 +239,18 @@ try
 	          $StorageSystem.UnmountVmfsVolume($resigds.ExtensionData.Info.vmfs.uuid) 
             $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
         }
-        Write-Host " Removing copied datastore..."
+        Write-Host (get-Date -Format G) + " Removing copied datastore..."
         Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $hostgroup
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
-        Write-Host " Rescanning cluster..."
+        Write-Host (get-Date -Format G) + " Rescanning cluster..."
         $targetvm |get-cluster | Get-VMHost | Get-VMHostStorage -RescanAllHba -RescanVMFS -ErrorAction stop 
-        Write-Host " COMPLETE: The VMDK has been moved and the temporary datastore has been deleted"
+        Write-Host (get-Date -Format G) + " COMPLETE: The VMDK has been moved and the temporary datastore has been deleted"
     }
 }
 catch
 {
-    Write-Host "  $($Error[0])"
+    Write-Host (get-Date -Format G) + "  $($Error[0])"
 }
 
 $endtime = $(Get-date)
