@@ -16,7 +16,7 @@ will not be liable for any damage or loss to the system.
 This can be run directly from PowerCLI or from a standard PowerShell prompt. PowerCLI must be installed on the local host regardless.
 
 Supports:
--PowerShell 3.0 or later
+-PowerShell 5.0 or later (note because of Import-PowerShellDataFile cmdlet)
 -Pure Storage PowerShell SDK 1.7 or later
 -PowerCLI 6.5 Release 1+
 -Purity 4.8 and later
@@ -26,6 +26,11 @@ Supports:
 #>
 #Import PowerCLI. Requires PowerCLI version 6.3 or later. Will fail here if PowerCLI is not installed
 #Will try to install PowerCLI with PowerShellGet if PowerCLI is not present.
+
+param ($parameterfile = $(throw "parameterfile is required"))
+if (!(Test-Path -Path $parameterfile)) {
+    throw "$parameterfile is not accessible"
+}
 
 if ((!(Get-Module -Name VMware.VimAutomation.Core -ErrorAction SilentlyContinue)) -and (!(get-Module -Name VMware.PowerCLI -ListAvailable))) {
     if (Test-Path "C:\Program Files (x86)\VMware\Infrastructure\PowerCLI\Scripts\Initialize-PowerCLIEnvironment.ps1")
@@ -73,7 +78,7 @@ $ErrorActionPreference = "Stop"
 $starttime = $(Get-Date)
 Write-Host "Starting VMDK cloning operation: $starttime"
 # load in required parameters from psd1 file
-$scriptparams = Import-PowerShellDataFile '.\CloneVMDKParameters.psd1'
+$scriptparams = Import-PowerShellDataFile $parameterfile
 # see https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/ for details
 # of how to update the password file contents 
 $purepassword = get-content $scriptparams.purepasswordfile | convertto-securestring
@@ -86,7 +91,7 @@ $vcenter = Connect-ViServer -server $scriptparams.vcenter -credential $vcentercr
 $purevolsnapshots = Get-PfaVolumeSnapshots -array $flasharray -volume $scriptparams.purevol
 #get the last(most recent) snapshot from the list
 $puresourcesnapshot = $purevolsnapshots[-1]
-Write-Host ((get-Date -Format G) + " Using most recent snapshot, $($puresourcesnapshot.Name) from $($scriptparams.purevol) to create temporary Pure Datastore Volume"
+Write-Host (get-Date -Format G) + " Using most recent snapshot, $($puresourcesnapshot.Name) from $($scriptparams.purevol) to create temporary Pure Datastore Volume"
 try
 {
     $volumename = $scriptparams.purevol + "-snap-" + (Get-Random -Minimum 1000 -Maximum 9999)
