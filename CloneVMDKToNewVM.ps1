@@ -87,14 +87,14 @@ if ((!(Get-Module -Name VMware.VimAutomation.Core -ErrorAction SilentlyContinue)
             write-host ("PowerCLI could not automatically be installed because PowerShellGet is not present. Please install PowerShellGet or PowerCLI") -BackgroundColor Red
             write-host "PowerShellGet can be found here https://www.microsoft.com/en-us/download/details.aspx?id=51451 or is included with PowerShell version 5"
             write-host "Terminating Script" -BackgroundColor Red
-            return
+            exit 1
         }
     }
     if ((!(Get-Module -Name VMware.VimAutomation.Core -ErrorAction SilentlyContinue)) -and (!(get-Module -Name VMware.PowerCLI -ListAvailable)))
     {
         write-host ("PowerCLI not found. Please verify installation and retry.") -BackgroundColor Red
         write-host "Terminating Script" -BackgroundColor Red
-        return
+        exit 1
     }
 }
 set-powercliconfiguration -invalidcertificateaction "ignore" -confirm:$false |out-null
@@ -244,7 +244,7 @@ catch
         $esxihosts = $resigds |get-vmhost
         foreach ($esxihost in $esxihosts)
         {
-            $storageSystem = Get-View $esxihost.Extensiondata.ConfigManager.StorageSystem -ErrorAction stop
+                    $storageSystem = Get-View $esxihost.Extensiondata.ConfigManager.StorageSystem -ErrorAction stop
 	          $StorageSystem.UnmountVmfsVolume($resigds.ExtensionData.Info.vmfs.uuid) 
             $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
         }
