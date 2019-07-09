@@ -257,34 +257,6 @@ catch
     }
     Exit 1
 }
-try
-{
-    Write-Host (get-Date -Format G) " Moving the VMDK to the original datastore..."
-    $targetDatastore = $scriptparams.datastore
-    Move-HardDisk -HardDisk $newDisk -Datastore ($targetDatastore) -Confirm:$false -ErrorAction stop
-    $vms = $resigds |get-vm
-    if ($vms.count -eq 0)
-    {
-        $esxihosts = $resigds |get-vmhost
-        foreach ($esxihost in $esxihosts)
-        {
-            $storageSystem = Get-View $esxihost.Extensiondata.ConfigManager.StorageSystem -ErrorAction stop
-	          $StorageSystem.UnmountVmfsVolume($resigds.ExtensionData.Info.vmfs.uuid) 
-            $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
-        }
-        Write-Host (get-Date -Format G) " Removing copied datastore..."
-        Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
-        Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
-        Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
-        Write-Host (get-Date -Format G) " Rescanning cluster..."
-        $targetvm |get-cluster | Get-VMHost | Get-VMHostStorage -RescanAllHba -RescanVMFS -ErrorAction stop 
-        Write-Host (get-Date -Format G) " COMPLETE: The VMDK has been moved and the temporary datastore has been deleted"
-    }
-}
-catch
-{
-    Write-Host (get-Date -Format G) "  $($Error[0])"
-}
 
 $endtime = $(Get-date)
 $elapsed = $endtime - $starttime
