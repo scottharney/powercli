@@ -248,7 +248,7 @@ catch
 	          $StorageSystem.UnmountVmfsVolume($resigds.ExtensionData.Info.vmfs.uuid) 
             $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
         }
-        Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $hostgroup
+        Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
         Write-Host (get-Date -Format G) " Rescanning cluster..."
@@ -273,7 +273,7 @@ try
             $storageSystem.DetachScsiLun((Get-ScsiLun -VmHost $esxihost | where {$_.CanonicalName -eq $resigds.ExtensionData.Info.Vmfs.Extent.DiskName}).ExtensionData.Uuid) 
         }
         Write-Host (get-Date -Format G) " Removing copied datastore..."
-        Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $hostgroup
+        Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name
         Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $newpurevol.name -Eradicate
         Write-Host (get-Date -Format G) " Rescanning cluster..."
