@@ -110,18 +110,18 @@ $scriptparams = Import-PowerShellDataFile $parameterfile
 # see https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/ for details
 # of how to update the password file contents 
 Write-Host (get-Date -Format G) "Setting Disk number " $scriptparams.destvmdisknumber " on VM " $scriptparams.destvm " offline" 
-#try
-# {
-#     $destvmpassword = get-content $scriptparams.destvmpasswordfile | convertto-securestring
-#     $destvmcreds = new-object -typename System.Management.Automation.PSCredential -argumentlist $scriptparams.destvmusername,$destvmpassword
-#     $mycimsession = New-CimSession -Computername $scriptparams.destvm -Credential $destvmcreds
-#     Set-Disk -Cimsession $mycimsession -number $scriptparams.destvmdisknumber -IsOffline $true
-# }
-# catch
-# {
-#     Write-Host (get-Date -Format G) " Failed to connect to $scriptparams.destvm and/or offline disk $($error[0])"
-#     Exit 1
-# }
+try
+{
+    $destvmpassword = get-content $scriptparams.destvmpasswordfile | convertto-securestring
+    $destvmcreds = new-object -typename System.Management.Automation.PSCredential -argumentlist $scriptparams.destvmusername,$destvmpassword
+    $mycimsession = New-CimSession -Computername $scriptparams.destvm -Credential $destvmcreds
+    Set-Disk -Cimsession $mycimsession -number $scriptparams.destvmdisknumber -IsOffline $true
+}
+catch
+{
+    Write-Host (get-Date -Format G) " Failed to connect to $scriptparams.destvm and/or offline disk $($error[0])"
+    Exit 1
+}
 
 Write-Host (get-Date -Format G) "Connecting to Pure Array $($scriptparams.purearray) and vcenter $($scriptparams.vcenter) "
 try
@@ -151,7 +151,7 @@ try
 {
     $hddname = get-content $scriptparams.destvmhddfile
     $hdd = Get-Harddisk -VM $scriptparams.destvm -Name $hddname
-    Remove-Harddisk -HardDisk $hdd -Confirm $false
+    Remove-Harddisk -HardDisk $hdd -Confirm:$false
 }
 catch
 {
@@ -159,25 +159,25 @@ catch
     Exit 1
 }
 
-Write-Host (get-Date -Format G) " Getting Pure volume name from $scriptparams.purevolumenamefile"
+Write-Host (get-Date -Format G) " Getting Pure volume name from " $scriptparams.purevolumenamefile
 try
 {
     $purevolname = Get-Content $scriptparams.purevolumenamefile
 }
 catch
 {
-    Write-Host (get-Date -Fromat G) "Unable to get data from  $scriptparams.purevolumenamefile $($error[0])"
+    Write-Host (get-Date -Fromat G) "Unable to get data from " $scriptparams.purevolumenamefile $($error[0])
     Exit 1
 }
 
-Write-Host (get-Date -Format G) " Removing Pure hostgroup connection $scriptparams.purehostgroup and volume $purevolname"
+Write-Host (get-Date -Format G) " Removing Pure hostgroup connection $($scriptparams.purehostgroup) and volume $purevolname"
 try
 {
     Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $purevolname -HostGroupName $scriptparams.purehostgroup
 }
 catch
 {
-    Write-Host (get-Date -Format G) " FAILED: Failed to remove Pure hostgroup $scriptparams.purehostgroup $($error[0])" 
+    Write-Host (get-Date -Format G) " FAILED: Failed to remove Pure hostgroup " $scriptparams.purehostgroup $($error[0])
     Exit 1
 }
 try
@@ -187,7 +187,7 @@ try
 }
 catch
 {
-    Write-Host (get-Date -Format G) " FAILED: Failed to remove Pure volume $purevolname $($error[0])" 
+    Write-Host (get-Date -Format G) " FAILED: Failed to remove Pure volume " $purevolname $($error[0]) 
     Exit 1
 }
 
@@ -199,7 +199,7 @@ try{
 }
 catch
 {
-    Write-Host (get-Date -Format G) " FAILED: Failed to remove datastore from cluster $scriptparams.vcluster $($error[0])" 
+    Write-Host (get-Date -Format G) " FAILED: Failed to remove datastore from cluster " $scriptparams.vcluster $($error[0])
     Exit 1
 }
 

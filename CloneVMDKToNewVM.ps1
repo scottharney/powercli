@@ -263,12 +263,12 @@ catch
 
 try
 {
-    Write-Host (get-Date -Format G) " Writing $newpurevol.name to file $scriptparams.purevolumenamefile"
+    Write-Host (get-Date -Format G) " Writing $($newpurevol.name) to file $($scriptparams.purevolumenamefile) "
     Set-Content -Path $scriptparams.purevolumenamefile -Value $newpurevol.name
 }
 catch
 {
-    Write-Host (get-Date -Format G) "Failed to write $scriptparams.purevolumenamefile $($error[0])"
+    Write-Host (get-Date -Format G) "Failed to write " $scriptparams.purevolumenamefile $($error[0])
     Exit 1
 }
 
