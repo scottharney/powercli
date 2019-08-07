@@ -43,13 +43,12 @@ Path to file which is in psd1 format with contents like this:
      # see https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/ for details
      # of how to update the password file contents 
     vcenterpasswordfile = '.\vcenterpassword.txt' # same deal for vcenter
-    purevol = 'purevolname' #name pure volume that holds our current cloned vmdk
-    datastore = 'vmwaredatastore' #name of the vmware datastore for the pure vol
     purehostgroup = 'hostgroupname' # name of a pure host group with cluster hosts
     destvm = 'vm' #the target VM that has hard disk from cloned VMDK
     destvmusername = 'vmusername' #dest VM user
     destvmpasswordfile = '.\destvmpassword.txt' #destination VM password file
     destvmdisknumber = 3 #the number of the hard disk that will be removed
+    purevolumenamefile = '.\purevolumenamefile.txt' #path to file to store name of created pure volume
 
 }
 #>
@@ -146,10 +145,21 @@ catch
     Exit 1
 }
 
-Write-Host (get-Date -Format G) " Removing Pure hostgroup connection $scriptparams.purehostgroup and volume $scriptparams.purevol"
+Write-Host (get-Date -Format G) " Getting Pure volume name from $scriptparams.purevolumenamefile"
 try
 {
-    RemovePfaHostGroupVolumeConnection -Array $scriptparams.purearray -VolumeName $scriptparams.purevol -HostGroupName $scriptparams.purehostgroup
+    $purevolname = $Get-Content $scriptparams.purevolumenamefile
+}
+catch
+{
+    Write-Host (get-Date -Fromat G) "Unable to get data from  $scriptparams.purevolumenamefile $($error[0])"
+    Exit 1
+}
+
+Write-Host (get-Date -Format G) " Removing Pure hostgroup connection $scriptparams.purehostgroup and volume $purevolname"
+try
+{
+    RemovePfaHostGroupVolumeConnection -Array $scriptparams.purearray -VolumeName $purevolname -HostGroupName $scriptparams.purehostgroup
 }
 catch
 {
@@ -158,12 +168,12 @@ catch
 }
 try
 {
-    Remove-PfaVolumeOrSnapshot -Array $scriptparams.purearray -Name $scriptparams.purevol
-    Remove-PfaVolumeOrSnapshot -Array $scriptparams.purearray -Name $scriptparams.purevol -Eradicate
+    Remove-PfaVolumeOrSnapshot -Array $scriptparams.purearray -Name $purevolname
+    Remove-PfaVolumeOrSnapshot -Array $scriptparams.purearray -Name $purevolname -Eradicate
 }
 catch
 {
-    Write-Host (get-Date -Format G) " FAILED: Failed to remove Pure volume $scriptparams.purevol $($error[0])" 
+    Write-Host (get-Date -Format G) " FAILED: Failed to remove Pure volume $purevolname $($error[0])" 
     Exit 1
 }
 
@@ -175,7 +185,7 @@ try{
 }
 catch
 {
-    Write-Host (get-Date -Format G) " FAILED: Failed to remove datastore $scriptparams.datastore from clsuter $scriptparams.vcluster $($error[0])" 
+    Write-Host (get-Date -Format G) " FAILED: Failed to remove datastore from cluster $scriptparams.vcluster $($error[0])" 
     Exit 1
 }
 

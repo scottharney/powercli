@@ -48,6 +48,7 @@ Path to file which is in psd1 format with contents like this:
     sourcevm = 'sourcevmname' # name of vm that has our source VMDK
     sourcevmdk = 'vmdk' #source vmdk name, usually it's going to be sourcevm.vmdk if only 1 vmdk but verify in fcenter or get-harddisk
     destvm = 'vm' #the target VM that will get the mapped vmdk
+    purevolumenamefile = '.\purevolumenamefile.txt' #path to file to store name of created pure volume
 
 }
 #>
@@ -255,6 +256,17 @@ catch
         $targetvm |get-cluster | Get-VMHost | Get-VMHostStorage -RescanAllHba -RescanVMFS -ErrorAction stop 
         Write-Host (get-Date -Format G) " The recovery datastore has been deleted"
     }
+    Exit 1
+}
+
+try
+{
+    Write-Host (get-Date -Format G) " Writing $purevoluname to file $scriptparams.purevolumenamefile"
+    Set-Content -Path $scriptparams.purevolumenamefile -Value $purevolumename
+}
+catch
+{
+    Write-Host (get-Date -Format G) "Failed to write $scriptparams.purevolumenamefile $($error[0])"
     Exit 1
 }
 

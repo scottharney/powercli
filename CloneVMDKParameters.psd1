@@ -12,5 +12,6 @@
     sourcevm = 'slab-win10-02-2018'
     sourcevmdk = 'slab-win10-02-2018.vmdk'
     destvm = 'ACI_Win10_01'
+    purevolumenamefile = '.\purevolumename.txt'
 
 }
