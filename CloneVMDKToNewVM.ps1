@@ -49,6 +49,7 @@ Path to file which is in psd1 format with contents like this:
     sourcevmdk = 'vmdk' #source vmdk name, usually it's going to be sourcevm.vmdk if only 1 vmdk but verify in fcenter or get-harddisk
     destvm = 'vm' #the target VM that will get the mapped vmdk
     purevolumenamefile = '.\purevolumenamefile.txt' #path to file to store name of created pure volume
+    destvmhddfile = '.\destvmhdd.txt' #store the destination VM's harddisk
 
 }
 #>
@@ -125,7 +126,7 @@ try
     $volumename = $scriptparams.purevol + "-snap-" + (Get-Random -Minimum 1000 -Maximum 9999)
     $newpurevol = New-PfaVolume -array $flasharray -source $puresourcesnapshot.name -VolumeName $volumename
     New-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $newpurevol.name -HostGroupName $scriptparams.purehostgroup
-    Write-Host (get-Date -Format G) " Pure temporary volume $($newpurevol.name) created and mapped to host group $($scriptparams.purehostgroup)"
+    Write-Host (get-Date -Format G) " Pure volume $($newpurevol.name) created and mapped to host group $($scriptparams.purehostgroup)"
     $cluster = get-cluster $scriptparams.vcluster
     $esxi = get-cluster -Name $scriptparams.vcluster | Get-VMHost -ErrorAction stop
     $esxcli=get-esxcli -VMHost $esxi[0] -v2 -ErrorAction stop
@@ -209,7 +210,7 @@ try
     $oldname = ($filepath.Split("]")[0]).substring(1)
     #$filepath = $filepath -replace $oldname, $resigds.name
     $filepath = "[$($resigds.name)] $($sourcevm.name)/$sourcevmdk"
-    Write-Host (get-Date -Format G) " DEBUG: Initial target filepath = $filepath"
+    #Write-Host (get-Date -Format G) " DEBUG: Initial target filepath = $filepath"
     Write-Host (get-Date -Format G) " Adding VMDK from copied datastore $datastore..."
     $vmDisks = $targetvm | get-harddisk
     $vdm = get-view -id (get-view serviceinstance).content.virtualdiskmanager
@@ -217,7 +218,7 @@ try
     foreach ($vmDisk in $vmDisks)
     {
         $currentUUID=$vdm.queryvirtualdiskuuid($vmDisk.Filename, $dc.id)
-        Write-Host (get-Date -Format G) " DEBUG: vmDisk=$vmDisk and filepath=$filepath"
+        #Write-Host (get-Date -Format G) " DEBUG: vmDisk=$vmDisk and filepath=$filepath"
         if ($currentUUID -eq $oldUUID)
         {
             Write-Host (get-Date -Format G) " Found duplicate disk UUID on target VM. Assigning a new UUID to the copied VMDK"
@@ -234,7 +235,8 @@ try
     $newDisk = $targetvm | new-harddisk -DiskPath $filepath -Controller $controller -ErrorAction stop
     Write-Host (get-Date -Format G) " COMPLETE: VMDK copy added to VM."
     Write-Host -ForegroundColor Green (get-Date -Format G) " You can now start using the Virtual Machine..."
-    $oldUUID=$vdm.queryvirtualdiskuuid($filePath, $dc.id)
+    #$oldUUID=$vdm.queryvirtualdiskuuid($filePath, $dc.id)
+    Set-Content -Path $scriptparams.destvmhddfile -Value $newDisk
 }
 catch
 {
@@ -261,8 +263,8 @@ catch
 
 try
 {
-    Write-Host (get-Date -Format G) " Writing $purevoluname to file $scriptparams.purevolumenamefile"
-    Set-Content -Path $scriptparams.purevolumenamefile -Value $purevolumename
+    Write-Host (get-Date -Format G) " Writing $newpurevol.name to file $scriptparams.purevolumenamefile"
+    Set-Content -Path $scriptparams.purevolumenamefile -Value $newpurevol.name
 }
 catch
 {

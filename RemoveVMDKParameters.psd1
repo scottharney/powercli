@@ -10,7 +10,8 @@
     destvmusername = 'Administrator'
     purehostgroup = 'slab-esxi-gen'
     destvm = 'ACI_Win10_01'
-    destvmdisknumber = '3'
+    destvmdisknumber = '1'
     purevolumenamefile = '.\purevolumename.txt'
+    destvmhddfile = '.\destvmhddfile.txt'
 
 }

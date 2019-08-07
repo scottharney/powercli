@@ -49,6 +49,7 @@ Path to file which is in psd1 format with contents like this:
     destvmpasswordfile = '.\destvmpassword.txt' #destination VM password file
     destvmdisknumber = 3 #the number of the hard disk that will be removed
     purevolumenamefile = '.\purevolumenamefile.txt' #path to file to store name of created pure volume
+    destvmhddfile = '.\destvmhdd.txt' # the destination VM's harddisk info file
 
 }
 #>
@@ -108,21 +109,21 @@ $starttime = $(Get-Date)
 $scriptparams = Import-PowerShellDataFile $parameterfile
 # see https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/ for details
 # of how to update the password file contents 
-Write-Host (get-Date -Format G) "Setting Disk number $scriptparams.destvmdisknumber on VM $scriptparams.destvm offline" 
-try
-{
-    $destvmpassword = get-content $scriptparams.destvmpasswordfile | convertto-securestring
-    $destvmcreds = new-object -typename System.Management.Automation.PSCredential -argumentlist $scriptparams.destvmusername,$destvmpassword
-    $mycimsession = New-CimSession -Computername $scriptparams.destvm -Credential $destvmcreds
-    Set-Disk -Cimsession $mycimsession -number $scriptparams.destvmdisknumber -IsOffline $true
-}
-catch
-{
-    Write-Host (get-Date -Format G) " Failed to connect to $scriptparams.destvm and/or offline disk $($error[0])"
-    Exit 1
-}
+Write-Host (get-Date -Format G) "Setting Disk number " $scriptparams.destvmdisknumber " on VM " $scriptparams.destvm " offline" 
+#try
+# {
+#     $destvmpassword = get-content $scriptparams.destvmpasswordfile | convertto-securestring
+#     $destvmcreds = new-object -typename System.Management.Automation.PSCredential -argumentlist $scriptparams.destvmusername,$destvmpassword
+#     $mycimsession = New-CimSession -Computername $scriptparams.destvm -Credential $destvmcreds
+#     Set-Disk -Cimsession $mycimsession -number $scriptparams.destvmdisknumber -IsOffline $true
+# }
+# catch
+# {
+#     Write-Host (get-Date -Format G) " Failed to connect to $scriptparams.destvm and/or offline disk $($error[0])"
+#     Exit 1
+# }
 
-Write-Host (get-Date -Format G) "Connecting to Pure Array $scriptparams.purearray and vcenter $scriptparams.vcenter"
+Write-Host (get-Date -Format G) "Connecting to Pure Array $($scriptparams.purearray) and vcenter $($scriptparams.vcenter) "
 try
 {
     $purepassword = get-content $scriptparams.purepasswordfile | convertto-securestring
@@ -131,7 +132,7 @@ try
 }
 catch
 {
-    Write-Host (get-Date -Fromat G) "Unable to connect to Pure array $scriptparams.purearray $($error[0])"
+    Write-Host (get-Date -Fromat G) "Unable to connect to Pure array " $scriptparams.purearray "$($error[0])"
     Exit 1
 }
 try {
@@ -141,14 +142,27 @@ try {
 }
 catch
 {
-    Write-Host (get-Date -Fromat G) "Unable to connect to vcenter $scriptparams.vcenter $($error[0])"
+    Write-Host (get-Date -Fromat G) "Unable to connect to vcenter " $scriptparams.vcenter $($error[0])
+    Exit 1
+}
+
+Write-Host (get-Date -Format G) " Removing hard disk from" $scriptparams.destvm $scriptparams.destvmharddisk
+try
+{
+    $hddname = get-content $scriptparams.destvmhddfile
+    $hdd = Get-Harddisk -VM $scriptparams.destvm -Name $hddname
+    Remove-Harddisk -HardDisk $hdd -Confirm $false
+}
+catch
+{
+    Write-Host (get-Date -Format G) "Unable to remove harddisk $($hddname) from " $scriptparams.destvm $($error[0])
     Exit 1
 }
 
 Write-Host (get-Date -Format G) " Getting Pure volume name from $scriptparams.purevolumenamefile"
 try
 {
-    $purevolname = $Get-Content $scriptparams.purevolumenamefile
+    $purevolname = Get-Content $scriptparams.purevolumenamefile
 }
 catch
 {
@@ -159,7 +173,7 @@ catch
 Write-Host (get-Date -Format G) " Removing Pure hostgroup connection $scriptparams.purehostgroup and volume $purevolname"
 try
 {
-    RemovePfaHostGroupVolumeConnection -Array $scriptparams.purearray -VolumeName $purevolname -HostGroupName $scriptparams.purehostgroup
+    Remove-PfaHostGroupVolumeConnection -Array $flasharray -VolumeName $purevolname -HostGroupName $scriptparams.purehostgroup
 }
 catch
 {
@@ -168,8 +182,8 @@ catch
 }
 try
 {
-    Remove-PfaVolumeOrSnapshot -Array $scriptparams.purearray -Name $purevolname
-    Remove-PfaVolumeOrSnapshot -Array $scriptparams.purearray -Name $purevolname -Eradicate
+    Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $purevolname
+    Remove-PfaVolumeOrSnapshot -Array $flasharray -Name $purevolname -Eradicate
 }
 catch
 {
