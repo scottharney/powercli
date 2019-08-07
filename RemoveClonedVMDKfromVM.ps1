@@ -109,7 +109,7 @@ $starttime = $(Get-Date)
 $scriptparams = Import-PowerShellDataFile $parameterfile
 # see https://blogs.technet.microsoft.com/robcost/2008/05/01/powershell-tip-storing-and-using-password-credentials/ for details
 # of how to update the password file contents 
-Write-Host (get-Date -Format G) "Setting Disk number $scriptparmas.destvmdisknumber on VM $scriptparams.destvm offline" 
+Write-Host (get-Date -Format G) "Setting Disk number $scriptparams.destvmdisknumber on VM $scriptparams.destvm offline" 
 try
 {
     $destvmpassword = get-content $scriptparams.destvmpasswordfile | convertto-securestring
